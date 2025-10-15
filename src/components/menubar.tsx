@@ -102,9 +102,9 @@ export const MenuBar = () => {
           />
           <DialogFooter>
             <DialogClose asChild>
-              <Button variant='outline'>Close</Button>
+              <Button variant='outline' className='hover:cursor-pointer'>Close</Button>
             </DialogClose>
-            <Button onClick={() => handleSpeedChange()}>Save</Button>
+            <Button onClick={() => handleSpeedChange()} className='hover:cursor-pointer'>Save</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -173,7 +173,7 @@ export const tickToScreenOffset = (tick: number, seq9: Seq9, speed: number = 1):
 }
 
 export const screenOffsetToTime = (offset: number, speed: number = 1): number => {
-  return offset * 10 / speed
+  return offset * 1000 / speed
 }
 export const screenOffsetToTick = (offset: number, seq9: Seq9, speed: number = 1): number => {
   const time = screenOffsetToTime(offset, speed)
