@@ -23,7 +23,7 @@ function App () {
     const stepRect = selectedElem?.getBoundingClientRect()
     if (!containerRect || !selectedStep || !stepRect || !seq) return
 
-    const tickOffset = screenOffsetToTick(stepRect.top + dy - containerRect.top - 8, seq, speed) - selectedStep.start_tick
+    const tickOffset = screenOffsetToTick(stepRect.top + dy - containerRect.top - ([StepKind.Down, StepKind.Jump].includes(selectedStep.kind) ? 0 : 8), seq, speed) - selectedStep.start_tick
     if (selectedStep.start_tick + tickOffset < 0 || selectedStep.end_tick + tickOffset > seq.info.end_tick) return
     const xOffset = dx / containerRect.width * 65536
     const leftPos = Math.round(selectedStep.left_pos + xOffset)
