@@ -16,6 +16,12 @@ export const Step = ({ step, seq, className, speed = 1, ...props }: React.Compon
   return (
     <svg
       data-slot='step'
+      data-player={step.player_id}
+      data-kind={step.kind}
+      data-start-tick={step.start_tick}
+      data-end-tick={step.end_tick}
+      data-left-pos={step.left_pos}
+      data-right-pos={step.right_pos}
       width={width}
       height={step.end_tick - step.start_tick + STROKE_WIDTH}
       viewBox={`0 0 ${width} ${step.end_tick - step.start_tick + STROKE_WIDTH}`}
@@ -23,7 +29,7 @@ export const Step = ({ step, seq, className, speed = 1, ...props }: React.Compon
         width: (width) / 65536 * 100 + '%',
         height: tickToScreenOffset(step.end_tick - step.start_tick, seq, speed) + STROKE_WIDTH + 'px',
         left: mostLeftPoint / 65536 * 100 + '%',
-        top: tickToScreenOffset(step.start_tick, seq, speed) + STROKE_WIDTH,
+        top: tickToScreenOffset(step.start_tick, seq, speed),
       }}
       className={
         cn(
@@ -59,7 +65,7 @@ export const Step = ({ step, seq, className, speed = 1, ...props }: React.Compon
               }).join(' ')}
               fill='currentColor'
             />
-            {step.long_point.point.length > 1 && step.long_point.point[step.long_point.point.length - 1].left_end_pos !== undefined && step.long_point.point[step.long_point.point.length - 1].right_end_pos !== undefined && (
+            {step.long_point.point[step.long_point.point.length - 1].left_end_pos !== undefined && step.long_point.point[step.long_point.point.length - 1].right_end_pos !== undefined && (
               <line
                 x1={step.long_point.point[step.long_point.point.length - 1].left_end_pos! - mostLeftPoint}
                 y1={step.long_point.point[step.long_point.point.length - 1].tick - step.start_tick + STROKE_WIDTH / 2}

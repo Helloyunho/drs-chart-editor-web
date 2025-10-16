@@ -56,7 +56,7 @@ export const MenuBar = () => {
   }
 
   return (
-    <div className='fixed top-0 left-0 w-full z-50'>
+    <div className='sticky top-0 left-0 w-full z-50'>
       <Menubar>
         <MenubarMenu>
           <MenubarTrigger>View</MenubarTrigger>
