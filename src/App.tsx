@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, startTransition } from 'react'
 import Moveable, { type OnDrag } from 'react-moveable'
 import { parseSeq9XML } from './lib/converter'
 import { StepKind, type Seq9, type Step } from './types/seq9'
@@ -10,8 +10,10 @@ import { MenuBar } from './components/menubar'
 import { useAtom } from 'jotai/react'
 import { speedAtom } from '@/stores/speed.atom'
 
-const TICK_SNAP_THRESHOLD = 30
-const X_SNAP_THRESHOLD = 360
+const X_SNAP_THRESHOLD = 480
+const Y_SNAP_THRESHOLD = 20
+const X_SNAP_RELEASE_THRESHOLD = 40
+const Y_SNAP_RELEASE_THRESHOLD = 40
 
 function App () {
   const seqRef = useRef<Seq9 | null>(null)
@@ -20,12 +22,24 @@ function App () {
   const [selectedElem, setSelectedElem] = useState<SVGElement | null>(null)
   const [selectedStep, setSelectedStep] = useState<Step | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
+  const dragSnapStateRef = useRef<{
+    snappedX: boolean
+    snappedY: boolean
+    snappedOffsetX: number
+    snappedOffsetY: number
+  }>({
+    snappedX: false,
+    snappedY: false,
+    snappedOffsetX: 0,
+    snappedOffsetY: 0
+  })
 
   const onDrag = useCallback(({ delta }: OnDrag) => {
     const [dx, dy] = delta
     const containerRect = containerRef.current?.getBoundingClientRect()
     const stepRect = selectedElem?.getBoundingClientRect()
     const seq = seqRef.current
+    const { snappedX, snappedY, snappedOffsetX, snappedOffsetY } = dragSnapStateRef.current
     if (!containerRect || !selectedStep || !stepRect || !seq) return
 
     const isSelectedStepJumpOrDown = selectedStep.kind === StepKind.Jump || selectedStep.kind === StepKind.Down
@@ -37,33 +51,96 @@ function App () {
     if (selectedStep.start_tick + tickOffset < 0 || selectedStep.end_tick + tickOffset > seq.info.end_tick) return
     const nextNumeratorTick = numTickWithMeasures(selectedStep.start_tick, seq, 'next')
     const prevNumeratorTick = numTickWithMeasures(selectedStep.start_tick, seq, 'prev')
-    if (Math.abs(selectedStep.start_tick + tickOffset - nextNumeratorTick) < TICK_SNAP_THRESHOLD) {
-      tickOffset = nextNumeratorTick - selectedStep.start_tick
-    } else if (Math.abs(selectedStep.start_tick + tickOffset - prevNumeratorTick) < TICK_SNAP_THRESHOLD) {
-      tickOffset = prevNumeratorTick - selectedStep.start_tick
+    if (Math.abs(selectedStep.start_tick + tickOffset - nextNumeratorTick) < Y_SNAP_THRESHOLD) {
+      if (snappedY) {
+        if (Math.abs(snappedOffsetY) < Y_SNAP_RELEASE_THRESHOLD) {
+          dragSnapStateRef.current.snappedOffsetY += dy
+          tickOffset = nextNumeratorTick - selectedStep.start_tick
+        }
+      } else {
+        dragSnapStateRef.current.snappedY = true
+        dragSnapStateRef.current.snappedOffsetY = 0
+        tickOffset = nextNumeratorTick - selectedStep.start_tick
+      }
+    } else if (Math.abs(selectedStep.start_tick + tickOffset - prevNumeratorTick) < Y_SNAP_THRESHOLD) {
+      if (snappedY) {
+        if (Math.abs(snappedOffsetY) < Y_SNAP_RELEASE_THRESHOLD) {
+          dragSnapStateRef.current.snappedOffsetY += dy
+          tickOffset = prevNumeratorTick - selectedStep.start_tick
+        }
+      } else {
+        dragSnapStateRef.current.snappedY = true
+        dragSnapStateRef.current.snappedOffsetY = 0
+        tickOffset = prevNumeratorTick - selectedStep.start_tick
+      }
+    } else {
+      dragSnapStateRef.current.snappedY = false
+      dragSnapStateRef.current.snappedOffsetY = 0
     }
     if (!isSelectedStepJumpOrDown) {
-      if (Math.abs(selectedStep.end_tick + tickOffset - nextNumeratorTick) < TICK_SNAP_THRESHOLD) {
-        tickOffset = nextNumeratorTick - selectedStep.end_tick
-      } else if (Math.abs(selectedStep.end_tick + tickOffset - prevNumeratorTick) < TICK_SNAP_THRESHOLD) {
-        tickOffset = prevNumeratorTick - selectedStep.end_tick
+      if (Math.abs(selectedStep.end_tick + tickOffset - nextNumeratorTick) < Y_SNAP_THRESHOLD) {
+        if (snappedY) {
+          if (Math.abs(snappedOffsetY) < Y_SNAP_RELEASE_THRESHOLD) {
+            dragSnapStateRef.current.snappedOffsetY += dy
+            tickOffset = nextNumeratorTick - selectedStep.end_tick
+          }
+        } else {
+          dragSnapStateRef.current.snappedY = true
+          dragSnapStateRef.current.snappedOffsetY = 0
+          tickOffset = nextNumeratorTick - selectedStep.end_tick
+        }
+      } else if (Math.abs(selectedStep.end_tick + tickOffset - prevNumeratorTick) < Y_SNAP_THRESHOLD) {
+        if (snappedY) {
+          if (Math.abs(snappedOffsetY) < Y_SNAP_RELEASE_THRESHOLD) {
+            dragSnapStateRef.current.snappedOffsetY += dy
+            tickOffset = prevNumeratorTick - selectedStep.end_tick
+          }
+        } else {
+          dragSnapStateRef.current.snappedY = true
+          dragSnapStateRef.current.snappedOffsetY = 0
+          tickOffset = prevNumeratorTick - selectedStep.end_tick
+        }
+      } else {
+        dragSnapStateRef.current.snappedY = false
+        dragSnapStateRef.current.snappedOffsetY = 0
       }
     }
 
     let xOffset = dx / containerRect.width * 65536
     if (isSelectedStepJumpOrDown) xOffset = 0
-    const leftPosWithOffset = selectedStep.left_pos + xOffset
-    const rightPosWithOffset = selectedStep.right_pos + xOffset
+    const maxLeftPos = selectedStep.long_point?.point.reduce((prev, curr) => Math.min(prev, curr.left_pos, curr.left_end_pos ?? 65536), selectedStep.left_pos) ?? selectedStep.left_pos
+    const maxRightPos = selectedStep.long_point?.point.reduce((prev, curr) => Math.max(prev, curr.right_pos, curr.right_end_pos ?? 0), selectedStep.right_pos) ?? selectedStep.right_pos
+    const leftPosWithOffset = maxLeftPos + xOffset
+    const rightPosWithOffset = maxRightPos + xOffset
     if (leftPosWithOffset < 0 || rightPosWithOffset > 65536) return
-    const leftSnapPos = Math.round(leftPosWithOffset / (65536 / 16)) * (65536 / 16)
-    const rightSnapPos = Math.round(rightPosWithOffset / (65536 / 16)) * (65536 / 16)
+    const leftSnapPos = Math.round(leftPosWithOffset / (4096)) * 4096 // divide it and round it to find snap spot
+    const rightSnapPos = Math.round(rightPosWithOffset / (4096)) * 4096 // 65536 / 16 = 4096
     if (Math.abs(leftPosWithOffset - leftSnapPos) < X_SNAP_THRESHOLD) {
-      xOffset = leftSnapPos - selectedStep.left_pos
+      if (snappedX) {
+        if (Math.abs(snappedOffsetX) < X_SNAP_RELEASE_THRESHOLD) {
+          dragSnapStateRef.current.snappedOffsetX += dx
+          xOffset = leftSnapPos - maxLeftPos
+        }
+      } else {
+        dragSnapStateRef.current.snappedX = true
+        dragSnapStateRef.current.snappedOffsetX = 0
+        xOffset = leftSnapPos - maxLeftPos
+      }
     } else if (Math.abs(rightPosWithOffset - rightSnapPos) < X_SNAP_THRESHOLD) {
-      xOffset = rightSnapPos - selectedStep.right_pos
+      if (snappedX) {
+        if (Math.abs(snappedOffsetX) < X_SNAP_RELEASE_THRESHOLD) {
+          dragSnapStateRef.current.snappedOffsetX += dx
+          xOffset = leftSnapPos - maxRightPos
+        }
+      } else {
+        dragSnapStateRef.current.snappedX = true
+        dragSnapStateRef.current.snappedOffsetX = 0
+        xOffset = leftSnapPos - maxRightPos
+      }
+    } else {
+      dragSnapStateRef.current.snappedX = false
+      dragSnapStateRef.current.snappedOffsetX = 0
     }
-
-    // Apply offsets after all checks
 
     const leftPos = Math.round(selectedStep.left_pos + xOffset)
     const rightPos = Math.round(selectedStep.right_pos + xOffset)
@@ -106,7 +183,9 @@ function App () {
     selectedStep.end_tick = endTick
     selectedStep.left_pos = leftPos
     selectedStep.right_pos = rightPos
-    forceRender((value) => value + 1)
+    startTransition(() => {
+      forceRender((value) => value + 1)
+    })
   }, [selectedElem, selectedStep, speed])
 
   useEffect(() => {
@@ -219,7 +298,12 @@ function App () {
                 target={selectedElem}
                 draggable
                 origin={false}
+                onDragStart={() => {
+                  dragSnapStateRef.current.snappedOffsetX = 0
+                  dragSnapStateRef.current.snappedOffsetY = 0
+                }}
                 onDrag={onDrag}
+                throttleDrag={1}
                 resizable={!selectedStep?.kind || [StepKind.Left, StepKind.Right].includes(selectedStep.kind)}
                 throttleResize={1}
               />
